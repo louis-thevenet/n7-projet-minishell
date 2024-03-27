@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 int main(void) {
   bool fini = false;
@@ -24,9 +26,9 @@ int main(void) {
       } else {
 
         /* Pour le moment le programme ne fait qu'afficher les commandes
-           tapees et les affiche à l'écran.
-           Cette partie est à modifier pour considérer l'exécution de ces
-           commandes
+        tapees et les affiche à l'écran.
+        Cette partie est à modifier pour considérer l'exécution de ces
+        commandes
         */
         int indexseq = 0;
         char **cmd;
@@ -36,13 +38,18 @@ int main(void) {
               fini = true;
               printf("Au revoir ...\n");
             } else {
-              printf("commande : ");
-              int indexcmd = 0;
-              while (cmd[indexcmd]) {
-                printf("%s ", cmd[indexcmd]);
-                indexcmd++;
+              int pid_fork = fork();
+              if (pid_fork == -1) {
+                printf("La commande n'a pas fonctionné.");
               }
-              printf("\n");
+
+              if (pid_fork == 0) {
+                execvp(cmd[0], &cmd[0]);
+              }
+              if (commande->backgrounded == NULL) {
+                int status;
+                waitpid(pid_fork, &status, 0);
+              }
             }
 
             indexseq++;

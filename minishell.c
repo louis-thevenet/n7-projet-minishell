@@ -45,6 +45,7 @@ int main(void) {
 
               if (pid_fork == 0) {
                 execvp(cmd[0], &cmd[0]);
+                exit(0);
               }
               if (commande->backgrounded == NULL) {
                 int status;

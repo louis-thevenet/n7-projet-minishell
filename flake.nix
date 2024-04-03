@@ -29,7 +29,7 @@
 
             src = ./.;
             nativeBuildInputs = with pkgs; [
-              gccStdenv
+
             ];
 
             buildInputs = with pkgs; [
@@ -37,8 +37,11 @@
 
 
             buildPhase = ''
+              make
             '';
             installPhase = ''
+mkdir -p $out/bin
+              cp minishell $out/bin
             '';
           };
 

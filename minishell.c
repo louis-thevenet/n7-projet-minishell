@@ -27,8 +27,9 @@ void traitement(int sig) {
   printf("Exit code : %d\nPID : %d\n", status, pid);
 }
 
-int create_fork(char **cmd, char *backgrounded) {
+void create_fork(char **cmd, char *backgrounded) {
   int pid_fork = fork();
+
   if (pid_fork == -1) {
     printf("La commande n'a pas fonctionné.");
   }
@@ -38,15 +39,10 @@ int create_fork(char **cmd, char *backgrounded) {
     printf("La commande n'a pas fonctionné.\n");
     exit(EXIT_FAILURE);
   } else {
-
-    int status;
     if (backgrounded == NULL) {
       pause();
-    } else {
-      waitpid(pid_fork, &status, WNOHANG | WUNTRACED | WCONTINUED);
     }
   }
-  return pid_fork;
 }
 
 void setup_sig_action() {

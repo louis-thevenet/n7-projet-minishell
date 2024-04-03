@@ -8,23 +8,27 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+int bg_pid;
+
 void traitement(int sig) {
   int status;
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
   if (pid != -1) {
     if (WIFSTOPPED(status)) {
-      printf("Processus interrompu\n");
+      printf("Processus %d interrompu\n", pid);
     }
     if (WIFCONTINUED(status)) {
-      printf("Processus continué\n");
+      printf("Processus %d continué\n", pid);
     }
     if (WIFEXITED(status)) {
-      printf(" Le processus fils s'est terminé avec le code %i\n ",
+      printf("Le processus %d s'est terminé avec le code %i\n", pid,
              WEXITSTATUS(status));
     }
-  }
 
-  printf("Exit code : %d\nPID : %d\n", status, pid);
+    if (pid == bg_pid && WIFEXITED(status)) {
+      bg_pid = 0;
+    }
+  }
 }
 
 void create_fork(char **cmd, char *backgrounded) {
@@ -40,7 +44,11 @@ void create_fork(char **cmd, char *backgrounded) {
     exit(EXIT_FAILURE);
   } else {
     if (backgrounded == NULL) {
-      pause();
+      bg_pid = pid_fork;
+
+      while (bg_pid != 0) {
+        pause();
+      }
     }
   }
 }

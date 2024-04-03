@@ -7,9 +7,13 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-void traitement(int sig) { printf("%d\n", sig); }
+void traitement(int sig) {
+  int status;
+  int pid = wait(&status);
+  printf("Exit code : %d\nPID : %d\n", status, pid);
+}
 
-int create_fork(char **cmd) {
+void create_fork(char **cmd, char *backgrounded) {
   int pid_fork = fork();
   if (pid_fork == -1) {
     printf("La commande n'a pas fonctionné.");
@@ -17,15 +21,13 @@ int create_fork(char **cmd) {
 
   if (pid_fork == 0) {
     execvp(cmd[0], cmd);
-    exit(0);
-  }
-  return pid_fork;
-}
-
-void wait_if_backgrounded(int pid_fork, char *backgrounded) {
-  if (backgrounded == NULL) {
+  } else {
     int status;
-    waitpid(pid_fork, &status, 0);
+    if (backgrounded == NULL) {
+      pause();
+    } else {
+      waitpid(pid_fork, &status, WNOHANG | WUNTRACED | WCONTINUED);
+    }
   }
 }
 
@@ -33,14 +35,14 @@ void setup_sig_action() {
   struct sigaction action;
   action.sa_handler = traitement;
   sigemptyset(&action.sa_mask);
-  action.sa_flags = 0;
+  action.sa_flags = SA_RESTART;
   sigaction(SIGCHLD, &action, NULL);
 }
 
 int main(void) {
   setup_sig_action();
-  bool fini = false;
 
+  bool fini = false;
   while (!fini) {
     printf("> ");
     struct cmdline *commande = readcmd();
@@ -70,8 +72,7 @@ int main(void) {
               fini = true;
               printf("Au revoir ...\n");
             } else {
-              int pid_fork = create_fork(cmd);
-              wait_if_backgrounded(pid_fork, commande->backgrounded);
+              create_fork(cmd, commande->backgrounded);
             }
 
             indexseq++;

@@ -1,5 +1,6 @@
 #include "readcmd.h"
 #include "signal.h"
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,11 +10,24 @@
 
 void traitement(int sig) {
   int status;
-  int pid = wait(&status);
+  int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
+  if (pid != -1) {
+    if (WIFSTOPPED(status)) {
+      printf("Processus interrompu\n");
+    }
+    if (WIFCONTINUED(status)) {
+      printf("Processus continué\n");
+    }
+    if (WIFEXITED(status)) {
+      printf(" Le processus fils s'est terminé avec le code %i\n ",
+             WEXITSTATUS(status));
+    }
+  }
+
   printf("Exit code : %d\nPID : %d\n", status, pid);
 }
 
-void create_fork(char **cmd, char *backgrounded) {
+int create_fork(char **cmd, char *backgrounded) {
   int pid_fork = fork();
   if (pid_fork == -1) {
     printf("La commande n'a pas fonctionné.");
@@ -22,6 +36,7 @@ void create_fork(char **cmd, char *backgrounded) {
   if (pid_fork == 0) {
     execvp(cmd[0], cmd);
   } else {
+
     int status;
     if (backgrounded == NULL) {
       pause();
@@ -29,6 +44,7 @@ void create_fork(char **cmd, char *backgrounded) {
       waitpid(pid_fork, &status, WNOHANG | WUNTRACED | WCONTINUED);
     }
   }
+  return pid_fork;
 }
 
 void setup_sig_action() {

@@ -1,10 +1,13 @@
 #include "readcmd.h"
+#include "signal.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+void traitement(int sig) { printf("%d\n", sig); }
 
 int create_fork(char **cmd) {
   int pid_fork = fork();
@@ -26,7 +29,16 @@ void wait_if_backgrounded(int pid_fork, char *backgrounded) {
   }
 }
 
+void setup_sig_action() {
+  struct sigaction action;
+  action.sa_handler = traitement;
+  sigemptyset(&action.sa_mask);
+  action.sa_flags = 0;
+  sigaction(SIGCHLD, &action, NULL);
+}
+
 int main(void) {
+  setup_sig_action();
   bool fini = false;
 
   while (!fini) {

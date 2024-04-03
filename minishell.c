@@ -6,6 +6,26 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+int create_fork(char **cmd) {
+  int pid_fork = fork();
+  if (pid_fork == -1) {
+    printf("La commande n'a pas fonctionné.");
+  }
+
+  if (pid_fork == 0) {
+    execvp(cmd[0], cmd);
+    exit(0);
+  }
+  return pid_fork;
+}
+
+void wait_if_backgrounded(int pid_fork, char *backgrounded) {
+  if (backgrounded == NULL) {
+    int status;
+    waitpid(pid_fork, &status, 0);
+  }
+}
+
 int main(void) {
   bool fini = false;
 
@@ -38,19 +58,8 @@ int main(void) {
               fini = true;
               printf("Au revoir ...\n");
             } else {
-              int pid_fork = fork();
-              if (pid_fork == -1) {
-                printf("La commande n'a pas fonctionné.");
-              }
-
-              if (pid_fork == 0) {
-                execvp(cmd[0], &cmd[0]);
-                exit(0);
-              }
-              if (commande->backgrounded == NULL) {
-                int status;
-                waitpid(pid_fork, &status, 0);
-              }
+              int pid_fork = create_fork(cmd);
+              wait_if_backgrounded(pid_fork, commande->backgrounded);
             }
 
             indexseq++;

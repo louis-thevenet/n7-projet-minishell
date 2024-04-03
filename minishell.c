@@ -35,6 +35,8 @@ int create_fork(char **cmd, char *backgrounded) {
 
   if (pid_fork == 0) {
     execvp(cmd[0], cmd);
+    printf("La commande n'a pas fonctionné.\n");
+    exit(EXIT_FAILURE);
   } else {
 
     int status;

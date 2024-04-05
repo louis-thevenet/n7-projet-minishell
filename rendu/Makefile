@@ -1,15 +1,15 @@
-# Ce Makefile est là pour vous aider 
+# Ce Makefile est là pour vous aider
 # Vous pouvez le modifier, ajouter des règles, en enlever ...
 # Vous pouvez ne pas vous en servir, mais ce serait un tort
 
 # Compilateur a utilliser
-CC=gcc 
+CC=gcc
 
 # Fichier à contruire
 EXE=minishell
 
-# Quelles options pour le compilateur ? 
-CFLAGS=-Wall -Wextra -pedantic -std=c11 -O3
+# Quelles options pour le compilateur ?
+CFLAGS=-Wall -Wextra -pedantic -O3
 
 # Options pour l'édition de liens
 LDFLAGS=

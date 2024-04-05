@@ -1,3 +1,4 @@
+#include "job.h"
 #include "readcmd.h"
 #include "signal.h"
 #include <signal.h>
@@ -7,23 +8,22 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include "job.h"
 int bg_pid;
-job jobs[NB_JOBS_MAX];
+job *jobs;
 
 void traitement(int sig) {
   int status;
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
   if (pid != -1) {
     if (WIFSTOPPED(status)) {
-      printf("Processus %d interrompu\n", pid);
+      printf("[Processus %d interrompu]\n", pid);
     }
     if (WIFCONTINUED(status)) {
-      printf("Processus %d continué\n", pid);
+      printf("[Processus %d continué]\n", pid);
     }
     if (WIFEXITED(status)) {
-      printf("Le processus %d s'est terminé avec le code %i\n", pid,
-            WEXITSTATUS(status));
+      printf("[Processus %d terminé avec le code %d]\n", pid,
+             WEXITSTATUS(status));
       rm_job_pid(jobs, pid);
     }
 
@@ -33,7 +33,31 @@ void traitement(int sig) {
   }
 }
 
-void create_fork(char **cmd, char *backgrounded) {
+void traiter_commande(char **cmd, char *backgrounded) {
+
+  if (strcmp(cmd[0], "lj") == 0) {
+    print_jobs(jobs);
+    return;
+  }
+
+  if (strcmp(cmd[0], "sj") == 0) {
+    int id = atoi(cmd[1]);
+    stop_job_pid(jobs, id);
+    return;
+  }
+
+  if (strcmp(cmd[0], "bg") == 0) {
+    int id = atoi(cmd[1]);
+    continue_job_bg_id(jobs, id);
+    return;
+  }
+  if (strcmp(cmd[0], "fg") == 0) {
+    int id = atoi(cmd[1]);
+    wait_job_id(jobs, id);
+
+    return;
+  }
+
   int pid_fork = fork();
 
   if (pid_fork == -1) {
@@ -46,8 +70,7 @@ void create_fork(char **cmd, char *backgrounded) {
     exit(EXIT_FAILURE);
 
   } else {
-    char* cmd_copy = malloc(sizeof(cmd[0]));
-    strcpy(cmd_copy, cmd[0]);
+    char *cmd_copy = build_command_string(cmd);
     add_job(jobs, (job){pid_fork, ACTIVE, cmd_copy});
 
     if (backgrounded == NULL) {
@@ -69,7 +92,8 @@ void setup_sig_action() {
 
 int main(void) {
   setup_sig_action();
-init_jobs(jobs);
+  jobs = malloc(sizeof(job) * NB_JOBS_MAX);
+  init_jobs(jobs);
   bool fini = false;
   while (!fini) {
     printf("> ");
@@ -100,7 +124,7 @@ init_jobs(jobs);
               fini = true;
               printf("Au revoir ...\n");
             } else {
-              create_fork(cmd, commande->backgrounded);
+              traiter_commande(cmd, commande->backgrounded);
             }
 
             indexseq++;

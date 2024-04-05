@@ -11,7 +11,9 @@ void init_jobs(job *jobs);
 int add_job(job *, job new_job);
 void rm_job_pid(job *jobs, int pid);
 void stop_job_pid(job *jobs, int pid);
+void stop_job_id(job *jobs, int id);
+
 void continue_job_bg_id(job *jobs, int id);
-void wait_job_id(job *jobs, int id);
+int wait_job_id(job *jobs, int id);
 char *build_command_string(char **cmd);
 void print_jobs(job *jobs);

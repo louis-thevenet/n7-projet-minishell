@@ -8,10 +8,10 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
-int bg_pid;
+int fg_pid;
 job *jobs;
 
-void traitement(int sig) {
+void traitement_sigchild() {
   int status;
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
   if (pid != -1) {
@@ -27,9 +27,25 @@ void traitement(int sig) {
       rm_job_pid(jobs, pid);
     }
 
-    if (pid == bg_pid && WIFEXITED(status)) {
-      bg_pid = 0;
+    if (pid == fg_pid && WIFEXITED(status)) {
+      fg_pid = 0;
     }
+  }
+}
+void traitement(int sig) {
+  switch (sig) {
+
+  case SIGTSTP:
+    stop_job_pid(jobs, fg_pid);
+    fg_pid = 0;
+    break;
+
+  case SIGCHLD:
+    traitement_sigchild();
+    break;
+
+  default:
+    break;
   }
 }
 
@@ -42,7 +58,7 @@ void traiter_commande(char **cmd, char *backgrounded) {
 
   if (strcmp(cmd[0], "sj") == 0) {
     int id = atoi(cmd[1]);
-    stop_job_pid(jobs, id);
+    stop_job_id(jobs, id);
     return;
   }
 
@@ -53,8 +69,10 @@ void traiter_commande(char **cmd, char *backgrounded) {
   }
   if (strcmp(cmd[0], "fg") == 0) {
     int id = atoi(cmd[1]);
-    wait_job_id(jobs, id);
-
+    fg_pid = wait_job_id(jobs, id);
+    while (fg_pid != 0) {
+      pause();
+    }
     return;
   }
 
@@ -74,8 +92,8 @@ void traiter_commande(char **cmd, char *backgrounded) {
     add_job(jobs, (job){pid_fork, ACTIVE, cmd_copy});
 
     if (backgrounded == NULL) {
-      bg_pid = pid_fork;
-      while (bg_pid != 0) {
+      fg_pid = pid_fork;
+      while (fg_pid != 0) {
         pause();
       }
     }
@@ -86,8 +104,11 @@ void setup_sig_action() {
   struct sigaction action;
   action.sa_handler = traitement;
   sigemptyset(&action.sa_mask);
+  sigaddset(&action.sa_mask, SIGTSTP);
+  sigaddset(&action.sa_mask, SIGINT);
   action.sa_flags = SA_RESTART;
   sigaction(SIGCHLD, &action, NULL);
+  sigaction(SIGTSTP, &action, NULL);
 }
 
 int main(void) {

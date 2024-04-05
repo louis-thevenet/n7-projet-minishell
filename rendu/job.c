@@ -41,8 +41,16 @@ void continue_job_bg_id(job *jobs, int id) {
   jobs[id].state = ACTIVE;
   kill(jobs[id].pid, SIGCONT);
 }
+void stop_job_pid(job *jobs, int pid) {
 
-void stop_job_pid(job *jobs, int id) {
+  for (int i = 0; i < NB_JOBS_MAX; i++) {
+    if (jobs[i].pid == pid) {
+      stop_job_id(jobs, i);
+    }
+  }
+}
+
+void stop_job_id(job *jobs, int id) {
   if (jobs[id].pid == -1 || id >= NB_JOBS_MAX) {
     fprintf(stderr, "No such job\n");
     return;
@@ -64,15 +72,15 @@ char *build_command_string(char **cmd) {
   }
   return command;
 }
-void wait_job_id(job *jobs, int id) {
+int wait_job_id(job *jobs, int id) {
   if (jobs[id].pid == -1 || id >= NB_JOBS_MAX) {
     fprintf(stderr, "No such job\n");
-    return;
+    return -1;
   }
 
   jobs[id].state = ACTIVE;
   kill(jobs[id].pid, SIGCONT);
-  waitpid(jobs[id].pid, NULL, 0);
+  return jobs[id].pid;
 }
 
 void print_jobs(job *jobs) {

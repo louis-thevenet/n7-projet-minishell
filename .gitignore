@@ -1,4 +1,5 @@
 .direnv/
 result
 *.o
-minishell
+minishell/minishell
+rendu/minishell

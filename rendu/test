@@ -1,0 +1,14 @@
+# bash
+
+for i in {1..500}
+do
+  echo "$i times"
+  sleep 2
+  if [ "$i" -eq 500 ]
+  then
+    exit 0
+
+
+fi
+done
+echo "Loop ended"

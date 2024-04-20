@@ -1,5 +1,4 @@
 #include "job.h"
-#include "sys/wait.h"
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,25 +37,44 @@ void continue_job_bg_id(job *jobs, int id) {
     return;
   }
 
-  jobs[id].state = ACTIVE;
+  jobs[id].state = ACTIVE; // redondant avec le handler
   kill(jobs[id].pid, SIGCONT);
 }
-void stop_job_pid(job *jobs, int pid) {
-
+int id_from_pid(job *jobs, int pid) {
   for (int i = 0; i < NB_JOBS_MAX; i++) {
     if (jobs[i].pid == pid) {
-      stop_job_id(jobs, i);
+      return i;
     }
   }
+  printf("No such job\n");
+  return -1;
+}
+void update_status_id(int state, job *jobs, int id) { jobs[id].state = state; }
+
+void update_status_pid(int state, job *jobs, int pid) {
+  int id = id_from_pid(jobs, pid);
+  if (id != -1) {
+    return;
+  }
+  update_status_id(state, jobs, id);
 }
 
-void stop_job_id(job *jobs, int id) {
+void send_stop_job_pid(job *jobs, int pid) {
+  int id = id_from_pid(jobs, pid);
+  if (id != -1) {
+    return;
+  }
+
+  send_stop_job_id(jobs, id);
+}
+
+void send_stop_job_id(job *jobs, int id) {
   if (jobs[id].pid == -1 || id >= NB_JOBS_MAX) {
     fprintf(stderr, "No such job\n");
     return;
   }
 
-  jobs[id].state = SUSPENDED;
+  jobs[id].state = SUSPENDED; // redondant avec le handler
   kill(jobs[id].pid, SIGSTOP);
 }
 char *build_command_string(char **cmd) {

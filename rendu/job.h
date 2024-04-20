@@ -10,8 +10,12 @@ typedef struct job {
 void init_jobs(job *jobs);
 int add_job(job *, job new_job);
 void rm_job_pid(job *jobs, int pid);
-void stop_job_pid(job *jobs, int pid);
-void stop_job_id(job *jobs, int id);
+void send_stop_job_pid(job *jobs, int pid);
+void send_stop_job_id(job *jobs, int id);
+
+void update_status_id(int state, job *jobs, int id);
+
+void update_status_pid(int state, job *jobs, int pid);
 
 void continue_job_bg_id(job *jobs, int id);
 int wait_job_id(job *jobs, int id);

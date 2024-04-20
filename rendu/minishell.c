@@ -16,22 +16,19 @@ void handler_sig_child() {
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
   if (pid != -1) {
     if (WIFSTOPPED(status)) {
-      printf("[Processus %d interrompu]\n", pid);
+      update_status_pid(SUSPENDED, jobs, pid);
     }
     if (WIFCONTINUED(status)) {
-      printf("[Processus %d continué]\n", pid);
+      update_status_pid(ACTIVE, jobs, pid);
     }
     if (WIFSIGNALED(status)) {
-      // Si Ctrl-C ou SIGINT, retire le job
       rm_job_pid(jobs, pid);
     }
     if (WIFEXITED(status)) {
-      printf("[Processus %d terminé avec le code %d]\n", pid,
-             WEXITSTATUS(status));
       rm_job_pid(jobs, pid);
     }
 
-    if (pid == fg_pid && WIFEXITED(status)) {
+    if (pid == fg_pid && !WIFCONTINUED(status)) {
       fg_pid = 0;
     }
   }
@@ -39,19 +36,14 @@ void handler_sig_child() {
 
 void handler_sig_tstp() {
   if (fg_pid != 0) {
-    stop_job_pid(jobs, fg_pid);
+    send_stop_job_pid(jobs, fg_pid);
     fg_pid = 0;
-  } else {
-    printf("No foreground process to suspend\n");
   }
 }
 void handler_sig_int() {
   if (fg_pid != 0) {
     kill(fg_pid, SIGTERM);
     fg_pid = 0;
-
-  } else {
-    printf("No foreground process to kill\n");
   }
 }
 
@@ -64,7 +56,7 @@ void traiter_commande(char **cmd, char *backgrounded) {
 
   if (strcmp(cmd[0], "sj") == 0) {
     int id = atoi(cmd[1]);
-    stop_job_id(jobs, id);
+    send_stop_job_id(jobs, id);
     return;
   }
 
@@ -83,7 +75,6 @@ void traiter_commande(char **cmd, char *backgrounded) {
   }
 
   if (strcmp(cmd[0], "susp") == 0) {
-    // need_stop = true;
     raise(SIGSTOP);
     return;
   }
@@ -100,7 +91,7 @@ void traiter_commande(char **cmd, char *backgrounded) {
     sigemptyset(&mask_set);
     sigaddset(&mask_set, SIGINT);
     sigaddset(&mask_set, SIGTSTP);
-    int ret_spm = sigprocmask(SIG_BLOCK, &mask_set, NULL);
+    sigprocmask(SIG_BLOCK, &mask_set, NULL);
 
     execvp(cmd[0], cmd);
     printf("La commande n'a pas fonctionné.\n");

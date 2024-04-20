@@ -11,7 +11,7 @@
 int fg_pid;
 job *jobs;
 
-void traitement_sigchild() {
+void handler_sig_child() {
   int status;
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
   if (pid != -1) {
@@ -20,6 +20,10 @@ void traitement_sigchild() {
     }
     if (WIFCONTINUED(status)) {
       printf("[Processus %d continué]\n", pid);
+    }
+    if (WIFSIGNALED(status)) {
+      // Si Ctrl-C ou SIGINT, retire le job
+      rm_job_pid(jobs, pid);
     }
     if (WIFEXITED(status)) {
       printf("[Processus %d terminé avec le code %d]\n", pid,
@@ -32,20 +36,22 @@ void traitement_sigchild() {
     }
   }
 }
-void traitement(int sig) {
-  switch (sig) {
 
-  case SIGTSTP:
+void handler_sig_tstp() {
+  if (fg_pid != 0) {
     stop_job_pid(jobs, fg_pid);
     fg_pid = 0;
-    break;
+  } else {
+    printf("No foreground process to suspend\n");
+  }
+}
+void handler_sig_int() {
+  if (fg_pid != 0) {
+    kill(fg_pid, SIGTERM);
+    fg_pid = 0;
 
-  case SIGCHLD:
-    traitement_sigchild();
-    break;
-
-  default:
-    break;
+  } else {
+    printf("No foreground process to kill\n");
   }
 }
 
@@ -76,6 +82,12 @@ void traiter_commande(char **cmd, char *backgrounded) {
     return;
   }
 
+  if (strcmp(cmd[0], "susp") == 0) {
+    // need_stop = true;
+    raise(SIGSTOP);
+    return;
+  }
+
   int pid_fork = fork();
 
   if (pid_fork == -1) {
@@ -83,6 +95,13 @@ void traiter_commande(char **cmd, char *backgrounded) {
   }
 
   if (pid_fork == 0) {
+
+    sigset_t mask_set;
+    sigemptyset(&mask_set);
+    sigaddset(&mask_set, SIGINT);
+    sigaddset(&mask_set, SIGTSTP);
+    int ret_spm = sigprocmask(SIG_BLOCK, &mask_set, NULL);
+
     execvp(cmd[0], cmd);
     printf("La commande n'a pas fonctionné.\n");
     exit(EXIT_FAILURE);
@@ -101,14 +120,23 @@ void traiter_commande(char **cmd, char *backgrounded) {
 }
 
 void setup_sig_action() {
-  struct sigaction action;
-  action.sa_handler = traitement;
-  sigemptyset(&action.sa_mask);
-  sigaddset(&action.sa_mask, SIGTSTP);
-  sigaddset(&action.sa_mask, SIGINT);
-  action.sa_flags = SA_RESTART;
-  sigaction(SIGCHLD, &action, NULL);
-  sigaction(SIGTSTP, &action, NULL);
+  struct sigaction sa_chld;
+  sa_chld.sa_handler = handler_sig_child;
+  sigemptyset(&sa_chld.sa_mask);
+  sa_chld.sa_flags = SA_RESTART;
+  sigaction(SIGCHLD, &sa_chld, NULL);
+
+  struct sigaction sa_tstp;
+  sa_tstp.sa_handler = handler_sig_tstp;
+  sigemptyset(&sa_tstp.sa_mask);
+  sa_tstp.sa_flags = SA_RESTART;
+  sigaction(SIGTSTP, &sa_tstp, NULL);
+
+  struct sigaction sa_int;
+  sa_int.sa_handler = handler_sig_int;
+  sigemptyset(&sa_int.sa_mask);
+  sa_int.sa_flags = SA_RESTART;
+  sigaction(SIGINT, &sa_int, NULL);
 }
 
 int main(void) {
@@ -121,22 +149,12 @@ int main(void) {
     struct cmdline *commande = readcmd();
 
     if (commande == NULL) {
-      // commande == NULL -> erreur readcmd()
       perror("erreur lecture commande \n");
 
     } else {
-
       if (commande->err) {
-        // commande->err != NULL -> commande->seq == NULL
         printf("erreur saisie de la commande : %s\n", commande->err);
-
       } else {
-
-        /* Pour le moment le programme ne fait qu'afficher les commandes
-        tapees et les affiche à l'écran.
-        Cette partie est à modifier pour considérer l'exécution de ces
-        commandes
-        */
         int indexseq = 0;
         char **cmd;
         while ((cmd = commande->seq[indexseq])) {

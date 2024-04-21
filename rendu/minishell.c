@@ -158,9 +158,10 @@ int main(void) {
   jobs = malloc(sizeof(job) * NB_JOBS_MAX);
   init_jobs(jobs);
   bool fini = false;
+  struct cmdline *commande;
   while (!fini) {
     printf("> ");
-    struct cmdline *commande = readcmd();
+    commande = readcmd();
 
     if (commande == NULL) {
       perror("erreur lecture commande \n");
@@ -186,5 +187,8 @@ int main(void) {
       }
     }
   }
+  freecmd(commande);
+  free(commande);
+  free(jobs);
   return EXIT_SUCCESS;
 }

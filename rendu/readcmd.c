@@ -139,8 +139,7 @@ static void freeseq(char ***seq) {
   free(seq);
 }
 
-/* Free the fields of the structure but not the structure itself */
-static void freecmd(struct cmdline *s) {
+void freecmd(struct cmdline *s) {
   if (s->in)
     free(s->in);
   if (s->out)

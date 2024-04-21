@@ -46,4 +46,6 @@ struct cmdline {
              * n'existant pas)
              */
 };
+/* Free the fields of the structure but not the structure itself */
+void freecmd(struct cmdline *s);
 #endif

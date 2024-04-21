@@ -61,10 +61,9 @@ void update_status_pid(int state, job *jobs, int pid) {
 
 void send_stop_job_pid(job *jobs, int pid) {
   int id = id_from_pid(jobs, pid);
-  if (id != -1) {
+  if (id == -1) {
     return;
   }
-
   send_stop_job_id(jobs, id);
 }
 

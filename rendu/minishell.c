@@ -8,6 +8,20 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#ifdef DEBUG
+#define LIGHT_GRAY "\033[1;30m"
+#define NC "\033[0m"
+#define DEBUG_PRINT(x)                                                         \
+  printf("%s", LIGHT_GRAY);                                                    \
+  printf x;                                                                    \
+  printf("%s", NC);
+#else
+#define DEBUG_PRINT(x)                                                         \
+  do {                                                                         \
+  } while (0)
+#endif
+
 int fg_pid;
 job *jobs;
 
@@ -16,15 +30,19 @@ void handler_sig_child() {
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
   if (pid != -1) {
     if (WIFSTOPPED(status)) {
+      DEBUG_PRINT(("[Child %d stopped]\n", pid));
       update_status_pid(SUSPENDED, jobs, pid);
     }
     if (WIFCONTINUED(status)) {
+      DEBUG_PRINT(("[Child %d continued]\n", pid));
       update_status_pid(ACTIVE, jobs, pid);
     }
     if (WIFSIGNALED(status)) {
+      DEBUG_PRINT(("[Child %d signaled]\n", pid));
       rm_job_pid(jobs, pid);
     }
     if (WIFEXITED(status)) {
+      DEBUG_PRINT(("[Child %d exited]\n", pid));
       rm_job_pid(jobs, pid);
     }
 
@@ -35,13 +53,18 @@ void handler_sig_child() {
 }
 
 void handler_sig_tstp() {
+  DEBUG_PRINT(("[SIGTSTP received]\n"));
   if (fg_pid != 0) {
+    DEBUG_PRINT(("[Stopping %d]\n", fg_pid));
+
     send_stop_job_pid(jobs, fg_pid);
     fg_pid = 0;
   }
 }
 void handler_sig_int() {
+  DEBUG_PRINT(("[SIGINT received]\n"));
   if (fg_pid != 0) {
+    DEBUG_PRINT(("[Killing %d]\n", fg_pid));
     kill(fg_pid, SIGTERM);
     fg_pid = 0;
   }

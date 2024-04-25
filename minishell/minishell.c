@@ -7,27 +7,60 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#define DEBUG
 
-int bg_pid;
+#ifdef DEBUG
+#define LIGHT_GRAY "\033[1;30m"
+#define NC "\033[0m"
+#define DEBUG_PRINT(x)                                                         \
+  printf("%s", LIGHT_GRAY);                                                    \
+  printf x;                                                                    \
+  printf("%s", NC);
+#else
+#define DEBUG_PRINT(x)                                                         \
+  do {                                                                         \
+  } while (0)
+#endif
 
-void traitement(int sig) {
+int fg_pid;
+
+void handler_sig_child() {
   int status;
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
   if (pid != -1) {
     if (WIFSTOPPED(status)) {
-      printf("Processus %d interrompu\n", pid);
+      DEBUG_PRINT(("[Child %d stopped]\n", pid));
     }
     if (WIFCONTINUED(status)) {
-      printf("Processus %d continué\n", pid);
+      DEBUG_PRINT(("[Child %d continued]\n", pid));
+    }
+    if (WIFSIGNALED(status)) {
+      DEBUG_PRINT(("[Child %d signaled]\n", pid));
     }
     if (WIFEXITED(status)) {
-      printf("Le processus %d s'est terminé avec le code %i\n", pid,
-             WEXITSTATUS(status));
+      DEBUG_PRINT(("[Child %d exited]\n", pid));
     }
 
-    if (pid == bg_pid && WIFEXITED(status)) {
-      bg_pid = 0;
+    if (pid == fg_pid && !WIFCONTINUED(status)) {
+      fg_pid = 0;
     }
+  }
+}
+
+void handler_sig_tstp() {
+  DEBUG_PRINT(("[SIGTSTP received]\n"));
+  if (fg_pid != 0) {
+    DEBUG_PRINT(("[Stopping %d]\n", fg_pid));
+    kill(fg_pid, SIGSTOP);
+    fg_pid = 0;
+  }
+}
+void handler_sig_int() {
+  DEBUG_PRINT(("[SIGINT received]\n"));
+  if (fg_pid != 0) {
+    DEBUG_PRINT(("[Killing %d]\n", fg_pid));
+    kill(fg_pid, SIGTERM);
+    fg_pid = 0;
   }
 }
 
@@ -39,26 +72,42 @@ void create_fork(char **cmd, char *backgrounded) {
   }
 
   if (pid_fork == 0) {
+
+    if (backgrounded != NULL) {
+      setpgrp();
+    }
+
     execvp(cmd[0], cmd);
     printf("La commande n'a pas fonctionné.\n");
     exit(EXIT_FAILURE);
   } else {
     if (backgrounded == NULL) {
-      bg_pid = pid_fork;
+      fg_pid = pid_fork;
 
-      while (bg_pid != 0) {
+      while (fg_pid != 0) {
         pause();
       }
     }
   }
 }
-
 void setup_sig_action() {
-  struct sigaction action;
-  action.sa_handler = traitement;
-  sigemptyset(&action.sa_mask);
-  action.sa_flags = SA_RESTART;
-  sigaction(SIGCHLD, &action, NULL);
+  struct sigaction sa_chld;
+  sa_chld.sa_handler = handler_sig_child;
+  sigemptyset(&sa_chld.sa_mask);
+  sa_chld.sa_flags = SA_RESTART;
+  sigaction(SIGCHLD, &sa_chld, NULL);
+
+  struct sigaction sa_tstp;
+  sa_tstp.sa_handler = handler_sig_tstp;
+  sigemptyset(&sa_tstp.sa_mask);
+  sa_tstp.sa_flags = SA_RESTART;
+  sigaction(SIGTSTP, &sa_tstp, NULL);
+
+  struct sigaction sa_int;
+  sa_int.sa_handler = handler_sig_int;
+  sigemptyset(&sa_int.sa_mask);
+  sa_int.sa_flags = SA_RESTART;
+  sigaction(SIGINT, &sa_int, NULL);
 }
 
 int main(void) {

@@ -1,3 +1,4 @@
+#include "fcntl.h"
 #include "readcmd.h"
 #include "signal.h"
 #include <signal.h>
@@ -7,7 +8,8 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#define DEBUG
+#define BUFSIZE 64
+// #define DEBUG
 
 #ifdef DEBUG
 #define LIGHT_GRAY "\033[1;30m"
@@ -23,7 +25,8 @@
 #endif
 
 int fg_pid;
-
+int fd_pipe_stdout_to_target;
+int fd_pipe_src_to_stdin;
 void handler_sig_child() {
   int status;
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
@@ -39,6 +42,10 @@ void handler_sig_child() {
     }
     if (WIFEXITED(status)) {
       DEBUG_PRINT(("[Child %d exited]\n", pid));
+      // close pipe if open
+      if (fd_pipe_stdout_to_target > 0) {
+        close(fd_pipe_stdout_to_target);
+      }
     }
 
     if (pid == fg_pid && !WIFCONTINUED(status)) {
@@ -64,7 +71,42 @@ void handler_sig_int() {
   }
 }
 
-void create_fork(char **cmd, char *backgrounded) {
+void redirect_pipe(int src, int dest) {
+  ssize_t bytesRead;
+  ssize_t bytesWritten;
+  char buf[BUFSIZE];
+
+  do {
+    bytesRead = read(src, buf, BUFSIZE);
+    bytesWritten = write(dest, buf, bytesRead);
+    DEBUG_PRINT(("read %ld, wrote %ld\n", bytesRead, bytesWritten));
+  } while (bytesRead > 0);
+  close(src);
+  close(dest);
+}
+
+void create_fork(char **cmd, struct cmdline *commande) {
+  int fd_in[2];
+  int fd_out[2];
+  fd_pipe_stdout_to_target = -1;
+  fd_pipe_src_to_stdin = -1;
+
+  if (commande->in != NULL) {
+    if (pipe(fd_in) == -1) {
+      printf("Error: Cannot create pipe\n");
+      return;
+    }
+    fd_pipe_src_to_stdin = fd_in[0];
+  }
+
+  if (commande->out != NULL) {
+    if (pipe(fd_out) == -1) {
+      printf("Error: Cannot create pipe\n");
+      return;
+    }
+    fd_pipe_stdout_to_target = fd_out[1];
+  }
+
   int pid_fork = fork();
 
   if (pid_fork == -1) {
@@ -73,16 +115,43 @@ void create_fork(char **cmd, char *backgrounded) {
 
   if (pid_fork == 0) {
 
-    if (backgrounded != NULL) {
+    if (commande->backgrounded != NULL) {
       setpgrp();
     }
 
+    // read from pipe
+    if (commande->in != NULL) {
+      dup2(fd_in[0], STDIN_FILENO);
+      close(fd_in[1]);
+    }
+    // write stdout to pipe
+    if (commande->out != NULL) {
+      dup2(fd_out[1], STDOUT_FILENO);
+      close(fd_out[0]);
+    }
     execvp(cmd[0], cmd);
     printf("La commande n'a pas fonctionné.\n");
     exit(EXIT_FAILURE);
   } else {
-    if (backgrounded == NULL) {
+    if (commande->backgrounded == NULL) {
       fg_pid = pid_fork;
+
+      if (commande->in != NULL) {
+        // write to stdin of child
+        int src = open(commande->in, O_RDONLY);
+        if (src == -1) {
+          printf("Le fichier n'a pas pu être lu\n");
+          return;
+        }
+        redirect_pipe(src, fd_in[1]);
+      }
+
+      if (commande->out != NULL) {
+        // read from stdout of child
+        int dest = open(commande->out, O_WRONLY | O_CREAT, S_IRWXU);
+
+        redirect_pipe(fd_out[0], dest);
+      }
 
       while (fg_pid != 0) {
         pause();
@@ -90,6 +159,7 @@ void create_fork(char **cmd, char *backgrounded) {
     }
   }
 }
+
 void setup_sig_action() {
   struct sigaction sa_chld;
   sa_chld.sa_handler = handler_sig_child;
@@ -143,7 +213,7 @@ int main(void) {
               fini = true;
               printf("Au revoir ...\n");
             } else {
-              create_fork(cmd, commande->backgrounded);
+              create_fork(cmd, commande);
             }
 
             indexseq++;

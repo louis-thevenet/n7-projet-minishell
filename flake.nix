@@ -9,64 +9,69 @@
   };
 
   outputs = inputs:
-    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+    inputs.flake-parts.lib.mkFlake {inherit inputs;} {
       systems = import inputs.systems;
       imports = [
         inputs.treefmt-nix.flakeModule
       ];
-      perSystem =
-        { config
-        , self'
-        , pkgs
-        , lib
-        , system
-        , ...
-        }:
-        {
-          packages.default = pkgs.stdenv.mkDerivation {
-            name = "minishell";
-            version = "1.0";
+      perSystem = {
+        config,
+        self',
+        pkgs,
+        lib,
+        system,
+        ...
+      }: {
+        packages.default = pkgs.stdenv.mkDerivation {
+          name = "minishell";
+          version = "1.0";
 
-            src = ./.;
-            nativeBuildInputs = with pkgs; [
+          src = ./.;
 
-            ];
+          nativeBuildInputs = [];
+          buildInputs = [];
 
-            buildInputs = with pkgs; [
-            ];
+          buildPhase = ''
+            make
+          '';
+          installPhase = ''
+            mkdir -p $out/bin
+            cp minishell $out/bin
+          '';
+        };
 
+        devShells.default = pkgs.mkShell {
+          inputsFrom = [
+            config.treefmt.build.devShell
+          ];
 
-            buildPhase = ''
-              make
-            '';
-            installPhase = ''
-mkdir -p $out/bin
-              cp minishell $out/bin
-            '';
-          };
+          packages = with pkgs; [
+            # C
+            gdb
+            valgrind
 
+            # Nix
+            nil
+            alejandra
 
+            # Typst
+            typst
+            typst-lsp
+            typst-fmt
 
+            # Utils
+            zip
+            unzip
+          ];
+        };
 
-          devShells.default = pkgs.mkShell {
-            inputsFrom = [
-              config.treefmt.build.devShell
-            ];
-
-            packages = with pkgs; [
-              gdb
-              valgrind
-            ];
-          };
-
-
-          treefmt.config = {
-            projectRootFile = "flake.nix";
-            programs = {
-              nixpkgs-fmt.enable = true;
-              clang-format.enable = true;
-            };
+        treefmt.config = {
+          projectRootFile = "flake.nix";
+          programs = {
+            nixpkgs-fmt.enable = true;
+            clang-format.enable = true;
           };
         };
+      };
     };
 }

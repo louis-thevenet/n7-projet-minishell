@@ -9,3 +9,10 @@
   subtitle: "1SN-F",
   toc: false,
 )
+
+=
+=
+
+#figure(
+  caption: [Entremêlement des sorties des processus],
+)[#image("./assets/q2_output.png")]

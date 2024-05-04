@@ -28,7 +28,7 @@
   show math.equation: set text(weight: 400)
 
   align(horizon + center)[
-    #image("logo.png", width: 42%)
+    #image("./assets/logo.png", width: 42%)
 
     #text(1.25em, subject)
 

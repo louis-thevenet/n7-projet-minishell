@@ -135,24 +135,26 @@ void create_fork(char **cmd, struct cmdline *commande) {
   } else {
     if (commande->backgrounded == NULL) {
       fg_pid = pid_fork;
+    }
 
-      if (commande->in != NULL) {
-        // write to stdin of child
-        int src = open(commande->in, O_RDONLY);
-        if (src == -1) {
-          printf("Le fichier n'a pas pu être lu\n");
-          return;
-        }
-        redirect_pipe(src, fd_in[1]);
+    if (commande->in != NULL) {
+      // write to stdin of child
+      int src = open(commande->in, O_RDONLY);
+      if (src == -1) {
+        printf("Le fichier n'a pas pu être lu\n");
+        return;
       }
+      redirect_pipe(src, fd_in[1]);
+    }
 
-      if (commande->out != NULL) {
-        // read from stdout of child
-        int dest = open(commande->out, O_WRONLY | O_CREAT, S_IRWXU);
+    if (commande->out != NULL) {
+      // read from stdout of child
+      int dest = open(commande->out, O_WRONLY | O_CREAT, S_IRWXU);
 
-        redirect_pipe(fd_out[0], dest);
-      }
+      redirect_pipe(fd_out[0], dest);
+    }
 
+    if (commande->backgrounded == NULL) {
       while (fg_pid != 0) {
         pause();
       }

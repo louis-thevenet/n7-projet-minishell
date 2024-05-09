@@ -1,3 +1,4 @@
+#include "fcntl.h"
 #include "job.h"
 #include "readcmd.h"
 #include "signal.h"
@@ -8,7 +9,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
+#define BUFSIZE 64
 #ifdef DEBUG
 #define LIGHT_GRAY "\033[1;30m"
 #define NC "\033[0m"
@@ -70,7 +71,21 @@ void handler_sig_int() {
   }
 }
 
-void traiter_commande(char **cmd, char *backgrounded) {
+void redirect_pipe(int src, int dest) {
+  ssize_t bytesRead;
+  ssize_t bytesWritten;
+  char buf[BUFSIZE];
+
+  do {
+    bytesRead = read(src, buf, BUFSIZE);
+    bytesWritten = write(dest, buf, bytesRead);
+    DEBUG_PRINT(("read %ld, wrote %ld\n", bytesRead, bytesWritten));
+  } while (bytesRead > 0);
+  close(src);
+  close(dest);
+}
+
+void traiter_commande(char **cmd, struct cmdline *commande) {
 
   if (strcmp(cmd[0], "lj") == 0) {
     print_jobs(jobs);
@@ -102,6 +117,25 @@ void traiter_commande(char **cmd, char *backgrounded) {
     return;
   }
 
+  int fd_in[2];
+  int fd_out[2];
+  int fd_input_pipe_chld_stdout_to_target = -1;
+
+  if (commande->in != NULL) {
+    if (pipe(fd_in) == -1) {
+      printf("Error: Cannot create pipe\n");
+      return;
+    }
+  }
+
+  if (commande->out != NULL) {
+    if (pipe(fd_out) == -1) {
+      printf("Error: Cannot create pipe\n");
+      return;
+    }
+    fd_input_pipe_chld_stdout_to_target = fd_out[1];
+  }
+
   int pid_fork = fork();
 
   if (pid_fork == -1) {
@@ -116,16 +150,46 @@ void traiter_commande(char **cmd, char *backgrounded) {
     sigaddset(&mask_set, SIGTSTP);
     sigprocmask(SIG_BLOCK, &mask_set, NULL);
 
+    // read from pipe
+    if (commande->in != NULL) {
+      dup2(fd_in[0], STDIN_FILENO);
+      close(fd_in[1]);
+    }
+    // write stdout to pipe
+    if (commande->out != NULL) {
+      dup2(fd_out[1], STDOUT_FILENO);
+      close(fd_out[0]);
+    }
+
     execvp(cmd[0], cmd);
     printf("La commande n'a pas fonctionné.\n");
     exit(EXIT_FAILURE);
 
   } else {
     char *cmd_copy = build_command_string(cmd);
-    add_job(jobs, (job){pid_fork, ACTIVE, cmd_copy});
-
-    if (backgrounded == NULL) {
+    add_job(jobs, (job){pid_fork, fd_input_pipe_chld_stdout_to_target, ACTIVE,
+                        cmd_copy});
+    if (commande->backgrounded == NULL) {
       fg_pid = pid_fork;
+    }
+    if (commande->in != NULL) {
+      // write to stdin of child
+      int src = open(commande->in, O_RDONLY);
+      if (src == -1) {
+        printf("Le fichier n'a pas pu être lu\n");
+        return;
+      }
+      redirect_pipe(src, fd_in[1]);
+    }
+
+    if (commande->out != NULL) {
+      // read from stdout of child
+      int dest = open(commande->out, O_WRONLY | O_CREAT, S_IRWXU);
+
+      redirect_pipe(fd_out[0], dest);
+    }
+
+    if (commande->backgrounded == NULL) {
       while (fg_pid != 0) {
         pause();
       }
@@ -178,7 +242,7 @@ int main(void) {
               fini = true;
               printf("Au revoir ...\n");
             } else {
-              traiter_commande(cmd, commande->backgrounded);
+              traiter_commande(cmd, commande);
             }
 
             indexseq++;

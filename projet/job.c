@@ -1,4 +1,5 @@
 #include "job.h"
+#include "unistd.h"
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +10,7 @@ void init_jobs(job jobs[]) {
     jobs[i].pid = -1;
     jobs[i].state = FINISHED;
     jobs[i].command = NULL;
+    jobs[i].fd_pipe_out = -1;
   }
 }
 
@@ -28,6 +30,10 @@ void rm_job_pid(job *jobs, int pid) {
       free(jobs[i].command);
       jobs[i].pid = -1;
       jobs[i].state = FINISHED;
+      if (jobs[i].fd_pipe_out > 0) {
+        close(jobs[i].fd_pipe_out);
+      }
+      jobs[i].fd_pipe_out = -1;
     }
   }
 }
@@ -105,6 +111,7 @@ void print_jobs(job *jobs) {
     if (jobs[i].pid != -1) {
       printf("Job %d\n", i);
       printf("\tPID: %d\n", jobs[i].pid);
+      printf("STDOUT -> %d", jobs[i].fd_pipe_out);
       printf("\tState: ");
       switch (jobs[i].state) {
       case ACTIVE:

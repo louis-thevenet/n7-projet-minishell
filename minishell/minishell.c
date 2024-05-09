@@ -25,8 +25,7 @@
 #endif
 
 int fg_pid;
-int fd_pipe_stdout_to_target;
-int fd_pipe_src_to_stdin;
+int fd_input_for_stdout;
 void handler_sig_child() {
   int status;
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
@@ -43,8 +42,8 @@ void handler_sig_child() {
     if (WIFEXITED(status)) {
       DEBUG_PRINT(("[Child %d exited]\n", pid));
       // close pipe if open
-      if (fd_pipe_stdout_to_target > 0) {
-        close(fd_pipe_stdout_to_target);
+      if (fd_input_for_stdout > 0) {
+        close(fd_input_for_stdout);
       }
     }
 
@@ -88,15 +87,13 @@ void redirect_pipe(int src, int dest) {
 void create_fork(char **cmd, struct cmdline *commande) {
   int fd_in[2];
   int fd_out[2];
-  fd_pipe_stdout_to_target = -1;
-  fd_pipe_src_to_stdin = -1;
+  fd_input_for_stdout = -1;
 
   if (commande->in != NULL) {
     if (pipe(fd_in) == -1) {
       printf("Error: Cannot create pipe\n");
       return;
     }
-    fd_pipe_src_to_stdin = fd_in[0];
   }
 
   if (commande->out != NULL) {
@@ -104,7 +101,7 @@ void create_fork(char **cmd, struct cmdline *commande) {
       printf("Error: Cannot create pipe\n");
       return;
     }
-    fd_pipe_stdout_to_target = fd_out[1];
+    fd_input_for_stdout = fd_out[1];
   }
 
   int pid_fork = fork();

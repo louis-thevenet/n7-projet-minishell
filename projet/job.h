@@ -3,6 +3,7 @@
 typedef enum job_state { ACTIVE, SUSPENDED, FINISHED } job_state;
 typedef struct job {
   int pid;
+  int fd_pipe_out; // to redirect stdout
   job_state state;
   char *command;
 } job;

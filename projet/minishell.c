@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+// #define DEBUG
 #define BUFSIZE 64
 #ifdef DEBUG
 #define LIGHT_GRAY "\033[1;30m"
@@ -207,6 +208,8 @@ void execute_command(char **cmd, struct cmdline *commande) {
     add_job(jobs, (job){pid_fork, fd_input_pipe_chld_stdout_to_target, ACTIVE,
                         cmd_copy});
 
+    close(fd_input_pipe_chld_stdout_to_target);
+
     // run in background ?
     if (commande->backgrounded == NULL) {
       fg_pid = pid_fork;
@@ -220,7 +223,12 @@ void execute_command(char **cmd, struct cmdline *commande) {
         printf("Error: input file could not be read\n");
         return;
       }
-      redirect_pipe(src, fd_in[1]);
+
+      int pid_fork_redirect = fork();
+      if (pid_fork_redirect == 0) {
+        redirect_pipe(src, fd_in[1]);
+        exit(0);
+      }
     }
 
     // is there an output file ?
@@ -232,7 +240,13 @@ void execute_command(char **cmd, struct cmdline *commande) {
         printf("Error: output file could not be created\n");
         return;
       }
-      redirect_pipe(fd_out[0], dest);
+      int pid_fork_redirect = fork();
+
+      if (pid_fork_redirect == 0) {
+
+        redirect_pipe(fd_out[0], dest);
+        exit(0);
+      }
     }
 
     if (commande->backgrounded == NULL) {

@@ -9,7 +9,6 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
-// #define DEBUG
 #define BUFSIZE 64
 #ifdef DEBUG
 #define LIGHT_GRAY "\033[1;30m"
@@ -220,7 +219,8 @@ void execute_command(char **cmd, struct cmdline *commande) {
       // source = input file
       int src = open(commande->in, O_RDONLY);
       if (src == -1) {
-        printf("Error: input file could not be read\n");
+        printf("Error: input file could not be read. Killing subprocess... \n");
+        send_stop_job_pid(jobs, fg_pid);
         return;
       }
 
@@ -229,6 +229,8 @@ void execute_command(char **cmd, struct cmdline *commande) {
         redirect_pipe(src, fd_in[1]);
         exit(0);
       }
+      close(src);
+      close(fd_in[1]);
     }
 
     // is there an output file ?
@@ -237,7 +239,11 @@ void execute_command(char **cmd, struct cmdline *commande) {
       int dest = open(commande->out, O_WRONLY | O_CREAT, S_IRWXU);
 
       if (dest == -1) {
-        printf("Error: output file could not be created\n");
+
+        printf(
+            "Error: output file could not be created. Killing subprocess...\n");
+        send_stop_job_pid(jobs, fg_pid);
+
         return;
       }
       int pid_fork_redirect = fork();
@@ -247,6 +253,8 @@ void execute_command(char **cmd, struct cmdline *commande) {
         redirect_pipe(fd_out[0], dest);
         exit(0);
       }
+      close(fd_out[0]);
+      close(dest);
     }
 
     if (commande->backgrounded == NULL) {

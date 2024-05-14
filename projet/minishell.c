@@ -26,6 +26,9 @@
 int fg_pid;
 job *jobs;
 
+/**
+ * Handler for SIGCHLD signal.
+ */
 void handler_sig_child() {
   int status;
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
@@ -53,6 +56,9 @@ void handler_sig_child() {
   }
 }
 
+/**
+ * Handler for SIGSTP signal. Stops the foreground process.
+ */
 void handler_sig_tstp() {
   DEBUG_PRINT(("[SIGTSTP received]\n"));
   if (fg_pid != 0) {
@@ -62,6 +68,10 @@ void handler_sig_tstp() {
     fg_pid = 0;
   }
 }
+
+/**
+ * Handler for SIGINT signal. Kills the foreground process.
+ */
 void handler_sig_int() {
   DEBUG_PRINT(("[SIGINT received]\n"));
   if (fg_pid != 0) {
@@ -71,6 +81,9 @@ void handler_sig_int() {
   }
 }
 
+/**
+ * Copies the contents from one file descriptor to another then closes both.
+ */
 void redirect_pipe(int src, int dest) {
   ssize_t bytesRead;
   ssize_t bytesWritten;
@@ -85,23 +98,27 @@ void redirect_pipe(int src, int dest) {
   close(dest);
 }
 
-void traiter_commande(char **cmd, struct cmdline *commande) {
+/**
+ * If the command is a built-in one, runs it and return true, returns false
+ * otherwise.
+ */
+bool built_in_commands(char **cmd) {
 
   if (strcmp(cmd[0], "lj") == 0) {
     print_jobs(jobs);
-    return;
+    return true;
   }
 
   if (strcmp(cmd[0], "sj") == 0) {
     int id = atoi(cmd[1]);
     send_stop_job_id(jobs, id);
-    return;
+    return true;
   }
 
   if (strcmp(cmd[0], "bg") == 0) {
     int id = atoi(cmd[1]);
     continue_job_bg_id(jobs, id);
-    return;
+    return true;
   }
   if (strcmp(cmd[0], "fg") == 0) {
     int id = atoi(cmd[1]);
@@ -109,18 +126,32 @@ void traiter_commande(char **cmd, struct cmdline *commande) {
     while (fg_pid != 0) {
       pause();
     }
-    return;
+    return true;
   }
 
   if (strcmp(cmd[0], "susp") == 0) {
     raise(SIGSTOP);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Executes a command in a child process. Handling pipes if needed. Waiting for
+ * the child process to finish if it's a foreground process.
+ */
+void execute_command(char **cmd, struct cmdline *commande) {
+  // is it a built-in command ?
+  if (built_in_commands(cmd)) {
     return;
   }
 
+  /********PIPES********/
   int fd_in[2];
   int fd_out[2];
   int fd_input_pipe_chld_stdout_to_target = -1;
 
+  // is there an input file ?
   if (commande->in != NULL) {
     if (pipe(fd_in) == -1) {
       printf("Error: Cannot create pipe\n");
@@ -128,6 +159,7 @@ void traiter_commande(char **cmd, struct cmdline *commande) {
     }
   }
 
+  // is there an output file ?
   if (commande->out != NULL) {
     if (pipe(fd_out) == -1) {
       printf("Error: Cannot create pipe\n");
@@ -136,13 +168,15 @@ void traiter_commande(char **cmd, struct cmdline *commande) {
     fd_input_pipe_chld_stdout_to_target = fd_out[1];
   }
 
+  /********FORK********/
   int pid_fork = fork();
 
   if (pid_fork == -1) {
-    printf("La commande n'a pas fonctionné.");
+    printf("Error: error while initiating child process\n");
   }
 
   if (pid_fork == 0) {
+    /********CHILD********/
 
     sigset_t mask_set;
     sigemptyset(&mask_set);
@@ -162,34 +196,47 @@ void traiter_commande(char **cmd, struct cmdline *commande) {
     }
 
     execvp(cmd[0], cmd);
-    printf("La commande n'a pas fonctionné.\n");
+    printf("Error: command failed to execute\n");
     exit(EXIT_FAILURE);
 
   } else {
+    /********PARENT********/
+
+    // create a job for the command
     char *cmd_copy = build_command_string(cmd);
     add_job(jobs, (job){pid_fork, fd_input_pipe_chld_stdout_to_target, ACTIVE,
                         cmd_copy});
+
+    // run in background ?
     if (commande->backgrounded == NULL) {
       fg_pid = pid_fork;
     }
+
+    // is there an input file ?
     if (commande->in != NULL) {
-      // write to stdin of child
+      // source = input file
       int src = open(commande->in, O_RDONLY);
       if (src == -1) {
-        printf("Le fichier n'a pas pu être lu\n");
+        printf("Error: input file could not be read\n");
         return;
       }
       redirect_pipe(src, fd_in[1]);
     }
 
+    // is there an output file ?
     if (commande->out != NULL) {
-      // read from stdout of child
+      // dest = output file
       int dest = open(commande->out, O_WRONLY | O_CREAT, S_IRWXU);
 
+      if (dest == -1) {
+        printf("Error: output file could not be created\n");
+        return;
+      }
       redirect_pipe(fd_out[0], dest);
     }
 
     if (commande->backgrounded == NULL) {
+      // wait for a signal from the child process
       while (fg_pid != 0) {
         pause();
       }
@@ -197,6 +244,9 @@ void traiter_commande(char **cmd, struct cmdline *commande) {
   }
 }
 
+/**
+ * Sets up signal handling for SIGCHLD, SIGTSTP and SIGINT.
+ */
 void setup_sig_action() {
   struct sigaction sa_chld;
   sa_chld.sa_handler = handler_sig_child;
@@ -217,32 +267,34 @@ void setup_sig_action() {
   sigaction(SIGINT, &sa_int, NULL);
 }
 
+/**
+ * Main loop
+ */
 int main(void) {
   setup_sig_action();
   jobs = malloc(sizeof(job) * NB_JOBS_MAX);
   init_jobs(jobs);
-  bool fini = false;
+  bool exited = false;
   struct cmdline *commande;
-  while (!fini) {
+  while (!exited) {
     printf("> ");
     commande = readcmd();
 
     if (commande == NULL) {
-      perror("erreur lecture commande \n");
+      perror("Error: could not read the command\n");
 
     } else {
       if (commande->err) {
-        printf("erreur saisie de la commande : %s\n", commande->err);
+        printf("Error: error while writing the command %s\n", commande->err);
       } else {
         int indexseq = 0;
         char **cmd;
         while ((cmd = commande->seq[indexseq])) {
           if (cmd[0]) {
             if (strcmp(cmd[0], "exit") == 0) {
-              fini = true;
-              printf("Au revoir ...\n");
+              exited = true;
             } else {
-              traiter_commande(cmd, commande);
+              execute_command(cmd, commande);
             }
 
             indexseq++;

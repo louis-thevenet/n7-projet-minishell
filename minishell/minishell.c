@@ -9,8 +9,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #define BUFSIZE 64
-// #define DEBUG
-
+#define DEBUG
 #ifdef DEBUG
 #define LIGHT_GRAY "\033[1;30m"
 #define NC "\033[0m"
@@ -26,6 +25,10 @@
 
 int fg_pid;
 int fd_input_for_stdout;
+
+/**
+ * Handler for SIGCHLD signal.
+ */
 void handler_sig_child() {
   int status;
   int pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
@@ -41,18 +44,20 @@ void handler_sig_child() {
     }
     if (WIFEXITED(status)) {
       DEBUG_PRINT(("[Child %d exited]\n", pid));
-      // close pipe if open
-      if (fd_input_for_stdout > 0) {
-        close(fd_input_for_stdout);
-      }
     }
 
+    if (fd_input_for_stdout > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
+      close(fd_input_for_stdout);
+    }
     if (pid == fg_pid && !WIFCONTINUED(status)) {
       fg_pid = 0;
     }
   }
 }
 
+/**
+ * Handler for SIGSTP signal. Stops the foreground process.
+ */
 void handler_sig_tstp() {
   DEBUG_PRINT(("[SIGTSTP received]\n"));
   if (fg_pid != 0) {
@@ -61,6 +66,10 @@ void handler_sig_tstp() {
     fg_pid = 0;
   }
 }
+
+/**
+ * Handler for SIGINT signal. Kills the foreground process.
+ */
 void handler_sig_int() {
   DEBUG_PRINT(("[SIGINT received]\n"));
   if (fg_pid != 0) {
@@ -70,6 +79,9 @@ void handler_sig_int() {
   }
 }
 
+/**
+ * Copies the contents from one file descriptor to another then closes both.
+ */
 void redirect_pipe(int src, int dest) {
   ssize_t bytesRead;
   ssize_t bytesWritten;
@@ -80,15 +92,23 @@ void redirect_pipe(int src, int dest) {
     bytesWritten = write(dest, buf, bytesRead);
     DEBUG_PRINT(("read %ld, wrote %ld\n", bytesRead, bytesWritten));
   } while (bytesRead > 0);
+  DEBUG_PRINT(("Closing pipes\n"));
   close(src);
   close(dest);
 }
 
+/**
+ * Executes a command in a child process. Handling pipes if needed. Waiting for
+ * the child process to finish if it's a foreground process.
+ */
 void create_fork(char **cmd, struct cmdline *commande) {
+
+  /********PIPES********/
   int fd_in[2];
   int fd_out[2];
   fd_input_for_stdout = -1;
 
+  // is there an input file ?
   if (commande->in != NULL) {
     if (pipe(fd_in) == -1) {
       printf("Error: Cannot create pipe\n");
@@ -96,14 +116,16 @@ void create_fork(char **cmd, struct cmdline *commande) {
     }
   }
 
+  // is there an output file ?
   if (commande->out != NULL) {
     if (pipe(fd_out) == -1) {
       printf("Error: Cannot create pipe\n");
       return;
     }
-    fd_input_for_stdout = fd_out[1];
+    fd_input_for_stdout = fd_out[1]; // global to be closed on SIGCHLD signal
   }
 
+  /********FORK********/
   int pid_fork = fork();
 
   if (pid_fork == -1) {
@@ -111,6 +133,7 @@ void create_fork(char **cmd, struct cmdline *commande) {
   }
 
   if (pid_fork == 0) {
+    /********CHILD********/
 
     if (commande->backgrounded != NULL) {
       setpgrp();
@@ -130,27 +153,37 @@ void create_fork(char **cmd, struct cmdline *commande) {
     printf("La commande n'a pas fonctionné.\n");
     exit(EXIT_FAILURE);
   } else {
+    /********PARENT********/
+
+    // run in background ?
     if (commande->backgrounded == NULL) {
       fg_pid = pid_fork;
     }
 
+    // is there an input file ?
     if (commande->in != NULL) {
-      // write to stdin of child
+      // source = input file
       int src = open(commande->in, O_RDONLY);
       if (src == -1) {
-        printf("Le fichier n'a pas pu être lu\n");
+        printf("Le fichier d'entrée n'a pas pu être lu\n");
         return;
       }
       redirect_pipe(src, fd_in[1]);
     }
 
+    // is there an output file ?
     if (commande->out != NULL) {
-      // read from stdout of child
+      // dest = output file
       int dest = open(commande->out, O_WRONLY | O_CREAT, S_IRWXU);
+      if (dest == -1) {
+        printf("Le fichier de sortie n'a pas pu être créé\n");
+        return;
+      }
 
       redirect_pipe(fd_out[0], dest);
     }
 
+    // wait for a signal from the child process
     if (commande->backgrounded == NULL) {
       while (fg_pid != 0) {
         pause();
@@ -159,6 +192,9 @@ void create_fork(char **cmd, struct cmdline *commande) {
   }
 }
 
+/**
+ * Sets up signal handling for SIGCHLD, SIGTSTP and SIGINT.
+ */
 void setup_sig_action() {
   struct sigaction sa_chld;
   sa_chld.sa_handler = handler_sig_child;
@@ -179,6 +215,9 @@ void setup_sig_action() {
   sigaction(SIGINT, &sa_int, NULL);
 }
 
+/**
+ * Main loop
+ */
 int main(void) {
   setup_sig_action();
 
@@ -199,11 +238,6 @@ int main(void) {
 
       } else {
 
-        /* Pour le moment le programme ne fait qu'afficher les commandes
-        tapees et les affiche à l'écran.
-        Cette partie est à modifier pour considérer l'exécution de ces
-        commandes
-        */
         int indexseq = 0;
         char **cmd;
         while ((cmd = commande->seq[indexseq])) {

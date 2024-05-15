@@ -2,31 +2,47 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    systems.url = "github:nix-systems/default";
 
     # Dev tools
     treefmt-nix.url = "github:numtide/treefmt-nix";
   };
+  outputs = inputs @ { flake-parts, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [ "x86_64-linux" ];
 
-  outputs = inputs:
-    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = import inputs.systems;
       imports = [
         inputs.treefmt-nix.flakeModule
       ];
+
       perSystem =
         { config
         , self'
         , pkgs
         , lib
-        , system
         , ...
         }: {
-          packages.default = pkgs.stdenv.mkDerivation {
-            name = "minishell";
+          packages.projet = pkgs.stdenv.mkDerivation {
+            name = "minishell-projet";
             version = "1.0";
 
-            src = ./.;
+            src = ./projet;
+
+            nativeBuildInputs = [ ];
+            buildInputs = [ ];
+
+            buildPhase = ''
+              make
+            '';
+            installPhase = ''
+              mkdir -p $out/bin
+              cp minishell $out/bin
+            '';
+          };
+          packages.tp = pkgs.stdenv.mkDerivation {
+            name = "minishell-tp";
+            version = "1.0";
+
+            src = ./minishell;
 
             nativeBuildInputs = [ ];
             buildInputs = [ ];

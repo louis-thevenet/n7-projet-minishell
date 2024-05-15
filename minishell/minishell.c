@@ -9,7 +9,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #define BUFSIZE 64
-#define DEBUG
+// #define DEBUG
 #ifdef DEBUG
 #define LIGHT_GRAY "\033[1;30m"
 #define NC "\033[0m"
@@ -101,28 +101,38 @@ void redirect_pipe(int src, int dest) {
  * Executes a command in a child process. Handling pipes if needed. Waiting for
  * the child process to finish if it's a foreground process.
  */
-void create_fork(char **cmd, struct cmdline *commande) {
+int create_fork(struct cmdline *commande, int index, int pipe_in) {
+  char **cmd = commande->seq[index];
+  bool last = !commande->seq[index + 1];
 
   /********PIPES********/
-  int fd_in[2];
-  int fd_out[2];
+  int fd_redirection_in[2];
+  int fd_redirection_out[2];
+  int fd_pipe[2];
   fd_input_for_stdout = -1;
 
   // is there an input file ?
   if (commande->in != NULL) {
-    if (pipe(fd_in) == -1) {
+    if (pipe(fd_redirection_in) == -1) {
       printf("Error: Cannot create pipe\n");
-      return;
+      return -1;
     }
   }
 
   // is there an output file ?
   if (commande->out != NULL) {
-    if (pipe(fd_out) == -1) {
+    if (pipe(fd_redirection_out) == -1) {
       printf("Error: Cannot create pipe\n");
-      return;
+      return -1;
     }
-    fd_input_for_stdout = fd_out[1]; // global to be closed on SIGCHLD signal
+    fd_input_for_stdout =
+        fd_redirection_out[1]; // global to be closed on SIGCHLD signal
+  }
+
+  // pipe between commands
+  if (pipe(fd_pipe) == -1) {
+    printf("Error: Cannot create pipe\n");
+    return -1;
   }
 
   /********FORK********/
@@ -139,16 +149,30 @@ void create_fork(char **cmd, struct cmdline *commande) {
       setpgrp();
     }
 
-    // read from pipe
+    /********REDIRECTIONS********/
+    // read from redirection pipe
     if (commande->in != NULL) {
-      dup2(fd_in[0], STDIN_FILENO);
-      close(fd_in[1]);
+      dup2(fd_redirection_in[0], STDIN_FILENO);
+      close(fd_redirection_in[1]);
     }
+
+    /********PIPELINES********/
+    // write stdout to pipe
+    if (!last) {
+      dup2(fd_pipe[1], STDOUT_FILENO);
+      close(fd_pipe[0]);
+    }
+    // read from pipe
+    if (pipe_in > 0) {
+      dup2(pipe_in, STDIN_FILENO);
+    }
+
     // write stdout to pipe
     if (commande->out != NULL) {
-      dup2(fd_out[1], STDOUT_FILENO);
-      close(fd_out[0]);
+      dup2(fd_redirection_out[1], STDOUT_FILENO);
+      close(fd_redirection_out[0]);
     }
+
     execvp(cmd[0], cmd);
     printf("La commande n'a pas fonctionné.\n");
     exit(EXIT_FAILURE);
@@ -166,9 +190,9 @@ void create_fork(char **cmd, struct cmdline *commande) {
       int src = open(commande->in, O_RDONLY);
       if (src == -1) {
         printf("Le fichier d'entrée n'a pas pu être lu\n");
-        return;
+        return -1;
       }
-      redirect_pipe(src, fd_in[1]);
+      redirect_pipe(src, fd_redirection_in[1]);
     }
 
     // is there an output file ?
@@ -177,10 +201,10 @@ void create_fork(char **cmd, struct cmdline *commande) {
       int dest = open(commande->out, O_WRONLY | O_CREAT, S_IRWXU);
       if (dest == -1) {
         printf("Le fichier de sortie n'a pas pu être créé\n");
-        return;
+        return -1;
       }
 
-      redirect_pipe(fd_out[0], dest);
+      redirect_pipe(fd_redirection_out[0], dest);
     }
 
     // wait for a signal from the child process
@@ -189,6 +213,8 @@ void create_fork(char **cmd, struct cmdline *commande) {
         pause();
       }
     }
+    close(fd_pipe[1]);
+    return fd_pipe[0];
   }
 }
 
@@ -220,7 +246,7 @@ void setup_sig_action() {
  */
 int main(void) {
   setup_sig_action();
-
+  int fd_stdout_current = 0;
   bool fini = false;
   while (!fini) {
     printf("> ");
@@ -240,13 +266,20 @@ int main(void) {
 
         int indexseq = 0;
         char **cmd;
+        fd_stdout_current = 0;
+
         while ((cmd = commande->seq[indexseq])) {
           if (cmd[0]) {
             if (strcmp(cmd[0], "exit") == 0) {
               fini = true;
               printf("Au revoir ...\n");
             } else {
-              create_fork(cmd, commande);
+              fd_stdout_current =
+                  create_fork(commande, indexseq, fd_stdout_current);
+            }
+            if (fd_stdout_current == -1) {
+              fini = true;
+              printf("erreur fork\n");
             }
 
             indexseq++;

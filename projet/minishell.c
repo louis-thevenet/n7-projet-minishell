@@ -140,22 +140,25 @@ bool built_in_commands(char **cmd) {
  * Executes a command in a child process. Handling pipes if needed. Waiting for
  * the child process to finish if it's a foreground process.
  */
-void execute_command(char **cmd, struct cmdline *commande) {
+int create_fork(struct cmdline *commande, int index, int pipe_in) {
   // is it a built-in command ?
-  if (built_in_commands(cmd)) {
-    return;
+  if (built_in_commands(commande->seq[index])) {
+    return pipe_in;
   }
+  char **cmd = commande->seq[index];
+  bool last = !commande->seq[index + 1];
 
   /********PIPES********/
   int fd_in[2];
   int fd_out[2];
+  int fd_pipe[2];
   int fd_input_pipe_chld_stdout_to_target = -1;
 
   // is there an input file ?
   if (commande->in != NULL) {
     if (pipe(fd_in) == -1) {
       printf("Error: Cannot create pipe\n");
-      return;
+      return -1;
     }
   }
 
@@ -163,9 +166,15 @@ void execute_command(char **cmd, struct cmdline *commande) {
   if (commande->out != NULL) {
     if (pipe(fd_out) == -1) {
       printf("Error: Cannot create pipe\n");
-      return;
+      return -1;
     }
     fd_input_pipe_chld_stdout_to_target = fd_out[1];
+  }
+
+  // pipe between commands
+  if (pipe(fd_pipe) == -1) {
+    printf("Error: Cannot create pipe\n");
+    return -1;
   }
 
   /********FORK********/
@@ -184,6 +193,8 @@ void execute_command(char **cmd, struct cmdline *commande) {
     sigaddset(&mask_set, SIGTSTP);
     sigprocmask(SIG_BLOCK, &mask_set, NULL);
 
+    /********REDIRECTIONS********/
+
     // read from pipe
     if (commande->in != NULL) {
       dup2(fd_in[0], STDIN_FILENO);
@@ -193,6 +204,17 @@ void execute_command(char **cmd, struct cmdline *commande) {
     if (commande->out != NULL) {
       dup2(fd_out[1], STDOUT_FILENO);
       close(fd_out[0]);
+    }
+
+    /********PIPELINES********/
+    // write stdout to pipe
+    if (!last) {
+      dup2(fd_pipe[1], STDOUT_FILENO);
+      close(fd_pipe[0]);
+    }
+    // read from pipe
+    if (pipe_in > 0) {
+      dup2(pipe_in, STDIN_FILENO);
     }
 
     execvp(cmd[0], cmd);
@@ -221,7 +243,7 @@ void execute_command(char **cmd, struct cmdline *commande) {
       if (src == -1) {
         printf("Error: input file could not be read. Killing subprocess... \n");
         send_stop_job_pid(jobs, fg_pid);
-        return;
+        return -1;
       }
 
       int pid_fork_redirect = fork();
@@ -243,8 +265,9 @@ void execute_command(char **cmd, struct cmdline *commande) {
         printf(
             "Error: output file could not be created. Killing subprocess...\n");
         send_stop_job_pid(jobs, fg_pid);
+        close(fd_pipe[1]);
 
-        return;
+        return fd_pipe[0];
       }
       int pid_fork_redirect = fork();
 
@@ -264,6 +287,8 @@ void execute_command(char **cmd, struct cmdline *commande) {
       }
     }
   }
+  close(fd_pipe[1]);
+  return fd_pipe[0];
 }
 
 /**
@@ -297,6 +322,7 @@ int main(void) {
   jobs = malloc(sizeof(job) * NB_JOBS_MAX);
   init_jobs(jobs);
   bool exited = false;
+  int fd_stdout_current = 0;
   struct cmdline *commande;
   while (!exited) {
     printf("> ");
@@ -311,12 +337,19 @@ int main(void) {
       } else {
         int indexseq = 0;
         char **cmd;
+        fd_stdout_current = 0;
         while ((cmd = commande->seq[indexseq])) {
           if (cmd[0]) {
             if (strcmp(cmd[0], "exit") == 0) {
               exited = true;
+              printf("Au revoir ...\n");
             } else {
-              execute_command(cmd, commande);
+              fd_stdout_current =
+                  create_fork(commande, indexseq, fd_stdout_current);
+            }
+            if (fd_stdout_current == -1) {
+              exited = true;
+              printf("erreur fork\n");
             }
 
             indexseq++;

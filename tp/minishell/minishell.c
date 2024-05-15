@@ -156,6 +156,11 @@ int create_fork(struct cmdline *commande, int index, int pipe_in) {
       close(fd_redirection_in[1]);
     }
 
+    // write stdout to pipe
+    if (commande->out != NULL) {
+      dup2(fd_redirection_out[1], STDOUT_FILENO);
+      close(fd_redirection_out[0]);
+    }
     /********PIPELINES********/
     // write stdout to pipe
     if (!last) {
@@ -165,12 +170,6 @@ int create_fork(struct cmdline *commande, int index, int pipe_in) {
     // read from pipe
     if (pipe_in > 0) {
       dup2(pipe_in, STDIN_FILENO);
-    }
-
-    // write stdout to pipe
-    if (commande->out != NULL) {
-      dup2(fd_redirection_out[1], STDOUT_FILENO);
-      close(fd_redirection_out[0]);
     }
 
     execvp(cmd[0], cmd);

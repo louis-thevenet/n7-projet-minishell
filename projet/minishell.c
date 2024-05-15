@@ -152,7 +152,7 @@ int create_fork(struct cmdline *commande, int index, int pipe_in) {
   int fd_in[2];
   int fd_out[2];
   int fd_pipe[2];
-  int fd_input_pipe_chld_stdout_to_target = -1;
+  int fd_input_pipe_chld_stdout_to_target;
 
   // is there an input file ?
   if (commande->in != NULL) {
@@ -175,6 +175,9 @@ int create_fork(struct cmdline *commande, int index, int pipe_in) {
   if (pipe(fd_pipe) == -1) {
     printf("Error: Cannot create pipe\n");
     return -1;
+  }
+  if (pipe_in > 0) {
+    fd_input_pipe_chld_stdout_to_target = fd_in[0];
   }
 
   /********FORK********/
@@ -349,7 +352,6 @@ int main(void) {
             }
             if (fd_stdout_current == -1) {
               exited = true;
-              printf("erreur fork\n");
             }
 
             indexseq++;

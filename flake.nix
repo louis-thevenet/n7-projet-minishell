@@ -6,88 +6,88 @@
     # Dev tools
     treefmt-nix.url = "github:numtide/treefmt-nix";
   };
-  outputs = inputs @ { flake-parts, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = [ "x86_64-linux" ];
+  outputs = inputs @ {flake-parts, ...}:
+    flake-parts.lib.mkFlake {inherit inputs;} {
+      systems = ["x86_64-linux"];
 
       imports = [
         inputs.treefmt-nix.flakeModule
       ];
 
-      perSystem =
-        { config
-        , self'
-        , pkgs
-        , lib
-        , ...
-        }: {
-          packages.projet = pkgs.stdenv.mkDerivation {
-            name = "minishell-projet";
-            version = "1.0";
+      perSystem = {
+        config,
+        self',
+        pkgs,
+        lib,
+        ...
+      }: {
+        packages.projet = pkgs.stdenv.mkDerivation {
+          name = "minishell";
+          version = "1.0";
 
-            src = ./projet;
+          src = ./projet;
 
-            nativeBuildInputs = [ ];
-            buildInputs = [ ];
+          nativeBuildInputs = [];
+          buildInputs = [];
 
-            buildPhase = ''
-              make
-            '';
-            installPhase = ''
-              mkdir -p $out/bin
-              cp minishell $out/bin
-            '';
-          };
-          packages.tp = pkgs.stdenv.mkDerivation {
-            name = "minishell-tp";
-            version = "1.0";
+          buildPhase = ''
+            make
+          '';
+          installPhase = ''
+            mkdir -p $out/bin
+            cp minishell $out/bin
+          '';
+        };
+        packages.tp = pkgs.stdenv.mkDerivation {
+          name = "minishell";
+          version = "1.0";
 
-            src = ./minishell;
+          src = ./minishell;
 
-            nativeBuildInputs = [ ];
-            buildInputs = [ ];
+          nativeBuildInputs = [];
+          buildInputs = [];
 
-            buildPhase = ''
-              make
-            '';
-            installPhase = ''
-              mkdir -p $out/bin
-              cp minishell $out/bin
-            '';
-          };
+          buildPhase = ''
+            make
+          '';
+          installPhase = ''
+            mkdir -p $out/bin
+            cp minishell $out/bin
+          '';
+        };
 
-          devShells.default = pkgs.mkShell {
-            inputsFrom = [
-              config.treefmt.build.devShell
-            ];
+        devShells.default = pkgs.mkShell {
+          inputsFrom = [
+            config.treefmt.build.devShell
+          ];
 
-            packages = with pkgs; [
-              # C
-              gdb
-              valgrind
+          packages = with pkgs; [
+            # C
+            gdb
+            valgrind
 
-              # Nix
-              nil
-              alejandra
+            # Nix
+            nil
+            alejandra
 
-              # Typst
-              typst
-              typst-lsp
-              typst-fmt
+            # Typst
+            typst
+            typst-lsp
+            typst-fmt
 
-              # Utils
-              zip
-              unzip
-            ];
-          };
+            # Utils
+            zip
+            unzip
+          ];
+        };
 
-          treefmt.config = {
-            projectRootFile = "flake.nix";
-            programs = {
-              nixpkgs-fmt.enable = true;
-              clang-format.enable = true;
-            };
+        treefmt.config = {
+          projectRootFile = "flake.nix";
+          programs = {
+            nixpkgs-fmt.enable = true;
+            clang-format.enable = true;
           };
         };
+      };
     };
 }

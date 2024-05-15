@@ -42,7 +42,7 @@
           name = "minishell";
           version = "1.0";
 
-          src = ./minishell;
+          src = ./tp/minishell;
 
           nativeBuildInputs = [];
           buildInputs = [];

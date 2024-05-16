@@ -250,15 +250,21 @@ int create_fork(struct cmdline *command, int index, int pipe_in) {
       int src = open(command->in, O_RDONLY);
       if (src == -1) {
         printf("Error: input file could not be read. Killing subprocess... \n");
-        send_stop_job_pid(jobs, fg_pid); // kill the child process
+        send_stop_job_pid(jobs, pid_fork); // kill the child process
         return -1;
       }
       // we handle the redirection in a separate process to avoid blocking the
       // parent process and support backgrounded commands.
-      int pid_fork_redirect = fork();
-      if (pid_fork_redirect == 0) {
+      switch (fork()) {
+      case 0:
         redirect_pipe(src, fd_in[1]);
         exit(0);
+
+      case -1:
+        printf("Error: could not fork to read input file. Killing "
+               "subprocess... \n");
+        send_stop_job_pid(jobs, pid_fork);
+        break;
       }
       close(src);
       close(fd_in[1]);
@@ -270,16 +276,22 @@ int create_fork(struct cmdline *command, int index, int pipe_in) {
       if (dest == -1) {
         printf(
             "Error: output file could not be created. Killing subprocess...\n");
-        send_stop_job_pid(jobs, fg_pid);
+        send_stop_job_pid(jobs, pid_fork);
         close(fd_pipe[1]);
         return -1;
       }
 
       // we also fork for the output file for the same reason
-      int pid_fork_redirect = fork();
-      if (pid_fork_redirect == 0) {
-        redirect_pipe(fd_out[0], dest);
+      switch (fork()) {
+      case 0:
+        redirect_pipe(dest, fd_in[1]);
         exit(0);
+
+      case -1:
+        printf("Error: could not fork to write to output file. Killing "
+               "subprocess... \n");
+        send_stop_job_pid(jobs, pid_fork);
+        break;
       }
       close(fd_out[0]);
       close(dest);

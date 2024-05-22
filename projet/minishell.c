@@ -122,7 +122,7 @@ bool built_in_commands(char **cmd) {
   }
   if (strcmp(cmd[0], "fg") == 0) {
     int id = atoi(cmd[1]);
-    fg_pid = wait_job_id(jobs, id);
+    fg_pid = continue_job_fg_id(jobs, id);
     while (fg_pid != 0) {
       pause();
     }

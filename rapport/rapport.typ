@@ -94,11 +94,37 @@ minishell :
 
 Ces commandes seront utilisées dans la suite pour illustrer l'état du minishell.
 
+De plus, un mode `debug` a été ajouté au projet afin d'afficher des informations
+sur les signaux reçus. Il fournit des messages de logs durant le foncitonnement.
+
+Pour l'activer, il faut compiler en définissant `DEBUG` qui change le comportant
+de la macro suivante :
+
+#sourcecode(
+  highlighted: (1,),
+  highlight-color: yellow,
+)[
+```c
+// #define DEBUG // A DECOMMENTER
+
+#ifdef DEBUG
+#define LIGHT_GRAY "\033[1;30m"
+#define NC "\033[0m"
+#define DEBUG_PRINT(x)                                                         \
+  printf("%s", LIGHT_GRAY);                                                    \
+  printf x;                                                                    \
+  printf("%s", NC);
+#else
+#define DEBUG_PRINT(x)                                                         \
+  do {                                                                         \
+  } while (0)
+#endif
+
+    ```
+]
+
 = Signaux
 == Signal `SIGCHLD`
-Un mode `debug` a été ajouté au projet afin d'afficher des informations sur les
-signaux reçus.
-
 Dans la @sigchild, on :
 - attend normalement la fin d'éxecution de la commande en avant-plan
 - attend normalement la fin d'éxecution de la commande en arrière-plan

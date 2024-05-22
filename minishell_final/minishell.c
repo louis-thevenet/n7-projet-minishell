@@ -10,7 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #define BUFSIZE 64
-#define DEBUG
+// #define DEBUG
 #ifdef DEBUG
 #define LIGHT_GRAY "\033[1;30m"
 #define NC "\033[0m"

@@ -11,17 +11,18 @@
   toc: true,
 )
 
-
 // #figure(
 //   caption: [Entremêlement des sorties des processus],
 // )[#image("./assets/q2_output.png")]
 
 = Gestion des processus
 == Enchaînement séquentiel des commandes
-#figure(caption: "On attend la fin de l'éxecution du fils pour passer à la prochaine commande")[
+#figure(
+  caption: "On attend la fin de l'éxecution du fils pour passer à la prochaine commande",
+)[
 #sourcecode[```rust
 > ls
-flake.lock  flake.nix  projet  rapport	result	sujets	tp
+flake.lock  flake.nix  projet  rapport  result  sujets  tp
 > echo test
 test
 > cat ./projet/test
@@ -33,8 +34,8 @@ Au revoir ...
 ]
 == Exécution en arrière-plan
 #figure(caption: "On exécute la commande en arrière-plan")[
-#sourcecode(highlighted:(10,), highlight-color: lime)[
-    ```rs
+#sourcecode(highlighted: (10,), highlight-color: lime)[
+```rs
 > cat ./projet/test
 #!/usr/bin/env bash
 
@@ -43,36 +44,60 @@ echo "Done!"
 > ./projet/test &
 >
 > ls
-flake.lock  flake.nix  projet  rapport	result	sujets	tp
+flake.lock  flake.nix  projet  rapport  result  sujets  tp
 > Done!
 >
 
     ```
-]]
+]
+]
 
-On peut également vérifier la bonne terminaison du fils après éxecution via `watch ps -sf` :
-#figure(caption: "Durant l'exécution")[
-#sourcecode(highlighted:(10,), highlight-color: lime)[
-    ```rs
+On peut également vérifier la bonne terminaison du fils après éxecution via
+`watch ps -sf` :
+#figure(
+  caption: "Durant l'exécution",
+)[
+#sourcecode(
+  highlighted: (10,),
+  highlight-color: lime,
+)[
+```rs
 S+   pts/2      0:00      \_ /nix/store/cci0aml5v6xdvkqrvg-minishell/bin/minishell
 S+   pts/2      0:00          \_ bash ./projet/test
 S+   pts/2      0:00              \_ sleep 5
 
     ```
-]]
+]
+]
 
-#figure(caption: "Après exécution")[
-#sourcecode(highlighted:(10,), highlight-color: lime)[
-    ```rs
+#figure(
+  caption: "Après exécution",
+)[
+#sourcecode(
+  highlighted: (10,),
+  highlight-color: lime,
+)[
+```rs
 S+   pts/2      0:00      \_ /nix/store/cci0aml5v6xdvkqrvg-minishell/bin/minishell
 
     ```
-]]
+]
+]
 
+= Gestion des tâches
+Comme proposé dans l'énoncé du projet, on ajoute des commandes internes au
+minishell :
+/ lj: (list jobs) Affiche les tâches en cours
+/ sj \<id>: (stop job) Arrête la tâche d'identifiant `id` (envoie `SIGSTOP`)
+/ fg \<id>: (foreground) Met la tâche d'identifiant `id` en avant-plan
+/ bg \<id>: (background) Met la tâche d'identifiant `id` en arrière-plan
+
+Ces commandes seront utilisées dans la suite pour illustrer l'état du minishell.
 
 = Signaux
 == Signal `SIGCHLD`
-Un mode `debug` a été ajouté au projet afin d'afficher des informations sur les signaux reçus.
+Un mode `debug` a été ajouté au projet afin d'afficher des informations sur les
+signaux reçus.
 
 Dans la @sigchild, on :
 - attend normalement la fin d'éxecution de la commande en avant-plan
@@ -80,12 +105,13 @@ Dans la @sigchild, on :
 - envoie le signal `SIGCHLD` au processus fils
 - envoie le signal `SIGSTOP` au processus fils
 - envoie le signal `SIGCONT` au processus fils
-- affiche les jobs en cours pour constater que le fils est continué en arrière-plan
+- affiche les jobs en cours pour constater que le fils est continué en
+  arrière-plan
 - On teste ensuite les signaux `SIGSTOP` et `SIGCONT` sur un job en arrière-plan.
 
-#figure(caption: "Démonstration `SIGCHLD`")[
+#figure(caption: [Démonstration `SIGCHLD`])[
 #sourcecode()[
-    ```rs
+```rs
 > sleep 2
 [Child 294501 exited]
 > sleep 2&
@@ -99,8 +125,8 @@ Dans la @sigchild, on :
 
 > lj
 Job 0
-	PID: 299625
-STDOUT -> 4207432	State: Active	Command: sleep 9999
+  PID: 299625
+STDOUT -> 4207432  State: Active  Command: sleep 9999
 >
 >
 >
@@ -112,27 +138,28 @@ STDOUT -> 4207432	State: Active	Command: sleep 9999
 
 > lj
 Job 0
-	PID: 299625
-STDOUT -> 4207432	State: Active	Command: sleep 9999
+  PID: 299625
+STDOUT -> 4207432  State: Active  Command: sleep 9999
 
 Job 1
-	PID: 335139
-STDOUT -> 4207432	State: Active	Command: sleep 999
+  PID: 335139
+STDOUT -> 4207432  State: Active  Command: sleep 999
 >
 
 
     ```
-]  ]<sigchild>
+]
+]<sigchild>
 
 == Signaux `SIGINT`, `SIGTSTP`
 
-On voit dans cet exemple que le programme père reçoit le signal `SIGINT`, qu'il décide de tuer le fils en avant-plan, finalement le message informant la terminaison du processus fils est affiché.
-
-
+On voit dans cet exemple que le programme père reçoit le signal `SIGINT`, qu'il
+décide de tuer le fils en avant-plan, finalement le message informant la
+terminaison du processus fils est affiché.
 
 #figure(caption: "Interruption au clavier")[
 #sourcecode()[
-    ```rs
+```rs
 > sleep 10
 ^C[SIGINT received]
 [Killing 343628]
@@ -140,12 +167,12 @@ On voit dans cet exemple que le programme père reçoit le signal `SIGINT`, qu'i
 
 >
     ```
-]]
-
+]
+]
 
 #figure(caption: [Envoie du signal `SIGTSTP`])[
 #sourcecode()[
-    ```rs
+```rs
 > sleep 10
 ^Z[SIGTSTP received]
 [Stopping 348897]
@@ -153,17 +180,21 @@ On voit dans cet exemple que le programme père reçoit le signal `SIGINT`, qu'i
 
 > lj
 Job 0
-	PID: 348897
-STDOUT -> 4207432	State: Suspended	Command: sleep 10
+  PID: 348897
+STDOUT -> 4207432  State: Suspended  Command: sleep 10
 >
     ```
-]]
+]
+]
 
-Les processus fils quant à eux ne reçoivent pas les signaux `SIGINT` et `SIGTSTP`, c'est le père qui gère les interruptions.
+Les processus fils quant à eux ne reçoivent pas les signaux `SIGINT` et
+`SIGTSTP`, c'est le père qui gère les interruptions.
 
-#figure(caption: [Les processus fils masquent les signaux `SIGINT` et `SIGTSTP`])[
+#figure(
+  caption: [Les processus fils masquent les signaux `SIGINT` et `SIGTSTP`],
+)[
 #sourcecode()[
-    ```rs
+```rs
 > sleep 999&
 > ^C[SIGINT received]
 ^C[SIGINT received]
@@ -172,12 +203,154 @@ Les processus fils quant à eux ne reçoivent pas les signaux `SIGINT` et `SIGTS
 
 > lj
 Job 0
-	PID: 355672
-STDOUT -> 4207432	State: Active	Command: sleep 999
+  PID: 355672
+STDOUT -> 4207432  State: Active  Command: sleep 999
 >
     ```
-]]
+]
+]
 
 = Fichiers et redirections
 
+Le mode debug affiche les nombres d'octets lus et écrits.
+
+#figure(
+  caption: [Démonstration des redirections vers des fichiers en avant plan],
+)[
+#sourcecode()[
+```rs
+> cat < ./projet/test
+[read 42, wrote 42]
+[read 0, wrote 0]
+[Child 137265 exited]
+#!/usr/bin/env bash
+
+sleep 5
+echo "Done!"
+[Child 137264 exited]
+> cat < ./projet/test > test
+[read 42, wrote 42]
+[read 0, wrote 0]
+[Child 137384 exited]
+[read 42, wrote 42]
+[read 0, wrote 0]
+[Child 137383 exited]
+> [Child 137385 exited]
+
+> cat test
+#!/usr/bin/env bash
+
+sleep 5
+echo "Done!"
+[Child 137434 exited]
+```
+]
+]
+
+L'exemple suivant montre que les redirections continuent de fonctionner en
+arrière-plan et respectent l'état du processus qui les envoit ou reçoit. On
+lance en arrière-plan un script dont la sortie est redirigée vers un fichier, on
+peut le mettre en pause et le reprendre sans que la redirection ne s'arrête.
+#figure(
+  caption: [Démonstration des redirections vers des fichiers en arrière-plan (sans affichage
+    debug)],
+)[
+#sourcecode()[
+```rs
+> cat ./projet/test_boucle
+#!/usr/bin/env bash
+
+for i in {1..50}; do
+  echo "Iteration $i"
+  sleep 3
+done
+echo "Done!"
+> ./projet/test_boucle > sortie &
+> cat sortie
+Iteration 1
+Iteration 2
+> #on attend un peu
+Error: command failed to execute
+> cat sortie
+Iteration 1
+Iteration 2
+Iteration 3
+Iteration 4
+> lj
+Job 0
+  PID: 153453
+STDOUT -> 4  State: Active  Command: ./projet/test_boucle
+> sj 0
+> lj
+Job 0
+  PID: 153453
+STDOUT -> 4  State: Suspended  Command: ./projet/test_boucle
+> cat sortie
+Iteration 1
+Iteration 2
+Iteration 3
+Iteration 4
+Iteration 5
+Iteration 6
+Iteration 7
+> cat sortie
+Iteration 1
+Iteration 2
+Iteration 3
+Iteration 4
+Iteration 5
+Iteration 6
+Iteration 7
+> bg 0
+> cat sortie
+Iteration 1
+Iteration 2
+Iteration 3
+Iteration 4
+Iteration 5
+Iteration 6
+Iteration 7
+Iteration 8
+Iteration 9
+```
+]
+]
+
 = Tubes
+#figure(caption: [Démonstration de tubes en avant-plan])[
+#sourcecode()[
+```rs
+> ls | wc
+[Child 176273 exited]
+      9       9      62
+[Child 176274 exited]
+>
+> cat flake.nix | grep pkgs | wc -l
+[Child 178832 exited]
+[Child 178833 exited]
+7
+[Child 178834 exited]
+>
+```
+]
+]
+
+L'exemple suivant montre que l'information du descripteur de fichier vers lequel
+la sortie est redirigée est stockée dans la liste des jobs.
+#figure(caption: [Démonstration de tubes en arrière-plan])[
+#sourcecode()[
+```rs
+>  ./projet/test_boucle | wc &
+> lj
+Job 0
+  PID: 179824
+STDOUT -> 4207432  State: Active  Command: ./projet/test_boucle
+Job 1
+  PID: 179825
+STDOUT -> 12800864  State: Active  Command: wc
+>      11      11      27
+[Child 179824 exited]
+[Child 179825 exited]
+```
+]
+]

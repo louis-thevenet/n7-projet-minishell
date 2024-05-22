@@ -93,7 +93,7 @@ void redirect_pipe(int src, int dest) {
   do {
     bytesRead = read(src, buf, BUFSIZE);
     bytesWritten = write(dest, buf, bytesRead);
-    DEBUG_PRINT(("read %ld, wrote %ld\n", bytesRead, bytesWritten));
+    DEBUG_PRINT(("[read %ld, wrote %ld]\n", bytesRead, bytesWritten));
   } while (bytesRead > 0);
   close(src);
   close(dest);
@@ -285,7 +285,7 @@ int create_fork(struct cmdline *command, int index, int pipe_in) {
       // we also fork for the output file for the same reason
       switch (fork()) {
       case 0:
-        redirect_pipe(dest, fd_in[1]);
+        redirect_pipe(fd_out[0], dest);
         exit(0);
 
       case -1:

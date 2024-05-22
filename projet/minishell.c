@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #define BUFSIZE 64
+#define DEBUG
 #ifdef DEBUG
 #define LIGHT_GRAY "\033[1;30m"
 #define NC "\033[0m"
@@ -35,11 +36,11 @@ void handler_sig_child() {
   if (pid != -1) {
     if (WIFSTOPPED(status)) {
       DEBUG_PRINT(("[Child %d stopped]\n", pid));
-      update_status_pid(SUSPENDED, jobs, pid);
+      send_stop_job_pid(jobs, pid);
     }
     if (WIFCONTINUED(status)) {
       DEBUG_PRINT(("[Child %d continued]\n", pid));
-      update_status_pid(ACTIVE, jobs, pid);
+      continue_job_bg_id(jobs, id_from_pid(jobs, pid));
     }
     if (WIFSIGNALED(status)) {
       DEBUG_PRINT(("[Child %d signaled]\n", pid));
